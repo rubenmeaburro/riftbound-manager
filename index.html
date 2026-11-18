@@ -34,14 +34,23 @@
     <section class="workspace">
       <aside class="side-panel panel">
         <div class="section-heading"><div><div class="eyebrow">PASO 1</div><h2>Elige leyenda</h2></div><span class="step-icon">01</span></div>
+        <label class="field-label" for="legend-query">Buscar listas públicas</label>
+        <div class="legend-search-row"><input id="legend-query" type="search" placeholder="Por ejemplo: Riven" maxlength="80"><button class="button button-primary" id="search-legend" type="button">Buscar</button></div>
+        <p class="legend-note">Busca listas recientes automáticamente; no tienes que descargar archivos.</p>
+        <p class="search-status" id="search-status" role="status" aria-live="polite">La búsqueda necesita una clave gratuita de TopDeck.gg configurada al arrancar el servidor local.</p>
+        <details class="search-options"><summary>Filtros de búsqueda</summary><div class="search-option-grid">
+          <label>Formato<select id="topdeck-format"><option>Constructed</option><option>Limited</option><option>Sealed</option><option>2v2</option><option>Free-for-All</option></select></label>
+          <label>Periodo<select id="topdeck-days"><option value="30">30 días</option><option value="90" selected>90 días</option><option value="180">180 días</option><option value="365">1 año</option></select></label>
+          <label>Mínimo de jugadores<select id="topdeck-minimum"><option value="0">Cualquiera</option><option value="8" selected>8</option><option value="16">16</option><option value="32">32</option></select></label>
+        </div></details>
         <label class="field-label" for="legend-select">Leyenda</label>
-        <select id="legend-select" disabled><option value="">Carga listas para empezar</option></select>
+        <select id="legend-select" disabled><option value="">Busca una leyenda para empezar</option></select>
         <div class="legend-note" id="legend-note">Las listas se agrupan por leyenda. Se muestra la frecuencia de inclusión en las listas que hayas importado.</div>
         <div class="divider"></div>
         <div class="section-heading compact"><div><div class="eyebrow">PASO 2</div><h2>Elige una lista base</h2></div><span class="step-icon">02</span></div>
         <label class="field-label" for="deck-select">Lista de referencia</label>
         <select id="deck-select" disabled><option value="">Elige una leyenda</option></select>
-        <div class="legend-note">Las listas recientes y con mejor resultado aparecen primero cuando esos datos se incluyen en la importación.</div>
+        <div class="legend-note">La lista con más cartas disponibles en tu colección aparece primero; después se priorizan puesto y fecha.</div>
         <button class="button button-outline full-width" id="open-import-side">Importar / actualizar datos</button>
       </aside>
 
@@ -57,7 +66,7 @@
         <div class="panel deck-panel">
           <div class="section-heading"><div><div class="eyebrow">AJUSTE A TU COLECCIÓN</div><h2>Huecos y sustituciones</h2></div><span class="sample-pill sample-neutral" id="gap-count">Sin lista</span></div>
           <p class="panel-intro" id="deck-intro">Selecciona una lista base. Para sugerir una alternativa, la app busca cartas disponibles en tu colección y compara tipo, función, coste, dominio y sinergias detectables.</p>
-          <div id="deck-results" class="deck-results"><div class="empty-state"><div class="empty-icon">↗</div><b>Empieza cargando tus datos</b><span>Catálogo de cartas, listas de mazo y colección. Todo se procesa en este dispositivo.</span><button class="text-button" id="open-import-empty">Abrir importador</button></div></div>
+          <div id="deck-results" class="deck-results"><div class="empty-state"><div class="empty-icon">↗</div><b>Busca una leyenda para empezar</b><span>Con el catálogo y tu colección cargados, la app compara la lista pública elegida y sugiere alternativas.</span><button class="text-button" id="open-import-empty">Abrir importador</button></div></div>
         </div>
       </section>
     </section>
@@ -84,16 +93,7 @@
         <div><span class="source-dot"></span><div><b>Catálogo público de RiftHunt</b><small>Descarga las cartas en JSON; la colección y las listas no se envían.</small></div></div>
         <button class="button button-outline" id="fetch-cards-online" type="button">Actualizar catálogo</button>
       </div>
-      <div class="topdeck-source">
-        <div class="topdeck-heading"><span class="source-dot"></span><div><b>Listas públicas de torneos · TopDeck.gg</b><small>Importa listas del formato y periodo; después se agrupan por leyenda.</small></div></div>
-        <div class="source-controls">
-          <label>Formato<select id="topdeck-format"><option>Constructed</option><option>Limited</option><option>Sealed</option><option>2v2</option><option>Free-for-All</option></select></label>
-          <label>Periodo<select id="topdeck-days"><option value="30">Últimos 30 días</option><option value="90" selected>Últimos 90 días</option><option value="180">Últimos 180 días</option><option value="365">Último año</option></select></label>
-          <label>Mínimo de jugadores<select id="topdeck-minimum"><option value="0">Cualquiera</option><option value="8" selected>8</option><option value="16">16</option><option value="32">32</option></select></label>
-          <button class="button button-outline" id="fetch-topdeck-decks" type="button">Importar listas</button>
-        </div>
-      </div>
-      <p class="source-caption">El catálogo se consulta como máximo una vez cada 24 horas. TopDeck requiere una clave gratuita que se introduce al arrancar el servidor local; la aplicación no la guarda. Solo se reciben listas públicas de torneos finalizados o con listas visibles. Piltover Archive permite exportar tu colección CSV, pero no publica documentación oficial para conectar su API.</p>
+      <p class="source-caption">El catálogo de RiftHunt se consulta como máximo una vez al día. La búsqueda usa TopDeck.gg y requiere una clave gratuita configurada en el servidor local. Las listas encontradas solo permanecen en memoria durante esta sesión.</p>
       <details class="format-details" id="format-details"><summary>Ver ejemplo de estructura</summary><pre>{
   "cards": [{
     "id": "ogn-001", "oracle_id": "card-001",

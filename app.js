@@ -11,10 +11,10 @@
     legend: $("#legend-select"), deck: $("#deck-select"), popularity: $("#popularity-body"),
     popularityTitle: $("#popularity-title"), popularityIntro: $("#popularity-intro"), sample: $("#sample-size"),
     gapCount: $("#gap-count"), deckIntro: $("#deck-intro"), deckResults: $("#deck-results"),
-    dialog: $("#import-dialog"), status: $("#import-status"), importButton: $("#import-submit")
+    dialog: $("#import-dialog"), status: $("#import-status"), searchStatus: $("#search-status"), importButton: $("#import-submit")
   };
   let db;
-  let state = { cards: [], decks: [], collection: [] };
+  let state = { cards: [], decks: [], onlineDecks: [], collection: [] };
   let lookup = { byId: new Map(), byName: new Map() };
 
   function openDb() {
@@ -286,6 +286,14 @@
     return illegal ? Math.max(0, 0.2 * shared / candidateDomains.size) : 0.75 + 0.25 * shared / candidateDomains.size;
   }
 
+  function isDomainCompatible(source, candidate, deck) {
+    const candidateDomains = new Set(candidate.domains.map(norm).filter((domain) => domain && domain !== "colorless"));
+    if (!candidateDomains.size) return true;
+    const allowedDomains = getDeckDomains(deck);
+    if (!allowedDomains.size) return true;
+    return [...candidateDomains].every((domain) => allowedDomains.has(domain));
+  }
+
   function getDeckDomains(deck) {
     const domains = new Set();
     for (const row of deck.cards) {
@@ -328,12 +336,22 @@
 
   function sortedDecks(decks) {
     return [...decks].sort((a, b) => {
+      const coverageDifference = deckCoverage(b) - deckCoverage(a);
+      if (coverageDifference) return coverageDifference;
       if (a.placement !== null && b.placement !== null && a.placement !== b.placement) return a.placement - b.placement;
       if (a.date && b.date && a.date !== b.date) return b.date.localeCompare(a.date);
       if (a.date) return -1;
       if (b.date) return 1;
       return a.name.localeCompare(b.name);
     });
+  }
+
+  function deckCoverage(deck) {
+    const owned = collectionMap();
+    const total = deck.cards.reduce((sum, row) => sum + row.quantity, 0);
+    if (!total) return 0;
+    const available = deck.cards.reduce((sum, row) => sum + Math.min(row.quantity, owned.get(row.identity) || 0), 0);
+    return Math.round((available / total) * 100);
   }
 
   function escapeHtml(value) {
@@ -351,7 +369,7 @@
   function renderLegendSelect() {
     const legends = [...new Set(state.decks.map((deck) => deck.legend).filter((legend) => legend && legend !== "Sin leyenda"))].sort((a, b) => a.localeCompare(b));
     const previous = ui.legend.value;
-    ui.legend.innerHTML = legends.length ? `<option value="">Selecciona una leyenda</option>${legends.map((legend) => `<option value="${escapeHtml(legend)}">${escapeHtml(legend)}</option>`).join("")}` : `<option value="">Carga listas para empezar</option>`;
+    ui.legend.innerHTML = legends.length ? `<option value="">Selecciona una leyenda</option>${legends.map((legend) => `<option value="${escapeHtml(legend)}">${escapeHtml(legend)}</option>`).join("")}` : `<option value="">Busca una leyenda para empezar</option>`;
     ui.legend.disabled = !legends.length;
     if (legends.includes(previous)) ui.legend.value = previous;
   }
@@ -361,7 +379,7 @@
     const decks = sortedDecks(state.decks.filter((deck) => deck.legend === legend));
     const previous = ui.deck.value;
     ui.deck.innerHTML = decks.length ? `<option value="">Selecciona una lista</option>${decks.map((deck) => {
-      const label = [deck.placement ? `#${deck.placement}` : "", deck.name, deck.event, deck.date].filter(Boolean).join(" · ");
+      const label = [`${deckCoverage(deck)}% en tu colección`, deck.placement ? `#${deck.placement}` : "", deck.name, deck.event, deck.date].filter(Boolean).join(" · ");
       return `<option value="${escapeHtml(deck.key)}">${escapeHtml(label)}</option>`;
     }).join("")}` : `<option value="">No hay listas para esta leyenda</option>`;
     ui.deck.disabled = !decks.length;
@@ -425,7 +443,7 @@
     const gapHtml = gaps.map((gap) => {
       const source = gap.card || { identity: gap.identity, name: gap.name, type: "", domains: [], energy: null, power: null, keywords: [], tags: [], text: "" };
       const candidates = [...cardsByIdentity.values()]
-        .filter((candidate) => candidate.identity !== gap.identity && (!source.type || norm(candidate.type) === norm(source.type)))
+        .filter((candidate) => candidate.identity !== gap.identity && (!source.type || norm(candidate.type) === norm(source.type)) && isDomainCompatible(source, candidate, deck))
         .map((candidate) => scoreCandidate(source, candidate, deck, owned.get(candidate.identity) || 0, baseCounts))
         .filter((candidate) => candidate.available > 0)
         .sort((a, b) => b.score - a.score)
@@ -443,7 +461,9 @@
 
   async function refresh() {
     state.cards = await readStore("cards");
-    state.decks = await readStore("decks");
+    const savedDecks = await readStore("decks");
+    const onlineIds = new Set(state.onlineDecks.map((deck) => deck.id));
+    state.decks = [...savedDecks.filter((deck) => !onlineIds.has(deck.id)), ...state.onlineDecks];
     state.collection = await readStore("collection");
     refreshLookup();
     updateCounts();
@@ -509,23 +529,31 @@
   }
 
   async function fetchTopDeckOnline() {
-    const button = $("#fetch-topdeck-decks");
-    if (!button) return;
+    const button = $("#search-legend");
+    const query = $("#legend-query").value.trim();
+    const setStatus = (message, isError = false) => {
+      ui.searchStatus.textContent = message;
+      ui.searchStatus.classList.toggle("error-text", isError);
+    };
+    if (!query) {
+      setStatus("Escribe una leyenda, por ejemplo Riven.", true);
+      $("#legend-query").focus();
+      return;
+    }
     if (!state.cards.length) {
-      ui.status.textContent = "Actualiza primero el catálogo de RiftHunt para poder asociar los nombres de las listas a sus cartas.";
-      ui.status.classList.add("error-text");
+      setStatus("Actualiza primero el catálogo de cartas para reconocer las listas.", true);
       return;
     }
     const previousLabel = button.textContent;
     button.disabled = true;
     button.textContent = "Buscando…";
-    ui.status.textContent = "Consultando las listas públicas de TopDeck.gg…";
-    ui.status.classList.remove("error-text");
+    setStatus(`Buscando listas públicas de ${query}…`);
     try {
       const response = await fetch("/api/topdeck/decks", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
+          legend: query,
           format: $("#topdeck-format").value,
           days: Number($("#topdeck-days").value),
           minimumPlayers: Number($("#topdeck-minimum").value)
@@ -535,17 +563,20 @@
       if (!response.ok) throw new Error(payload.error || `El servidor respondió ${response.status}.`);
       const imported = (payload.decks || []).map((deck, index) => parseDeck(deck, index));
       if (!imported.length) {
-        ui.status.textContent = "TopDeck no encontró listas públicas con esos filtros. Prueba otro periodo o formato.";
+        state.onlineDecks = [];
+        await refresh();
+        setStatus(`No encontré listas públicas de ${query} con estos filtros. Prueba ampliar el periodo o bajar el mínimo de jugadores.`);
         return;
       }
-      const decksById = new Map(state.decks.map((deck) => [deck.id, deck]));
-      for (const deck of imported) decksById.set(deck.id, deck);
-      await replaceStore("decks", [...decksById.values()]);
+      state.onlineDecks = imported;
       await refresh();
-      ui.status.textContent = `Añadidas o actualizadas ${imported.length} listas públicas de TopDeck.gg. Total guardado: ${state.decks.length}.`;
+      const bestDeck = sortedDecks(imported)[0];
+      ui.legend.value = bestDeck.legend;
+      renderDeckSelect();
+      const selectedDeck = state.decks.find((deck) => deck.key === ui.deck.value) || bestDeck;
+      setStatus(`Encontré ${imported.length} listas de ${bestDeck.legend}. He seleccionado la que más puedes completar: ${deckCoverage(selectedDeck)}% de las cartas en tu colección.`);
     } catch (error) {
-      ui.status.textContent = error.message || "No se pudieron importar las listas de TopDeck.gg.";
-      ui.status.classList.add("error-text");
+      setStatus(error.message || "No se pudieron buscar listas de TopDeck.gg.", true);
     } finally {
       button.disabled = false;
       button.textContent = previousLabel;
@@ -612,12 +643,15 @@
   }
 
   async function exportData() {
-    const snapshot = { exported_at: new Date().toISOString(), cards: state.cards, decks: state.decks, collection: state.collection };
+    const onlineIds = new Set(state.onlineDecks.map((deck) => deck.id));
+    const savedDecks = state.decks.filter((deck) => !onlineIds.has(deck.id));
+    const snapshot = { exported_at: new Date().toISOString(), cards: state.cards, decks: savedDecks, collection: state.collection };
     download("riftbound-deck-advisor-backup.json", JSON.stringify(snapshot, null, 2), "application/json");
   }
 
   async function clearData() {
     if (!window.confirm("¿Borrar del navegador el catálogo, las listas y tu colección? Esta acción no se puede deshacer.")) return;
+    state.onlineDecks = [];
     await Promise.all([replaceStore("cards", []), replaceStore("decks", []), replaceStore("collection", [])]);
     await refresh();
   }
@@ -634,7 +668,10 @@
     ui.deck.addEventListener("change", renderSelectedDeck);
     ui.importButton.addEventListener("click", importSelected);
     $("#fetch-cards-online").addEventListener("click", fetchCardsOnline);
-    $("#fetch-topdeck-decks").addEventListener("click", fetchTopDeckOnline);
+    $("#search-legend").addEventListener("click", fetchTopDeckOnline);
+    $("#legend-query").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") { event.preventDefault(); fetchTopDeckOnline(); }
+    });
     $("#export-data").addEventListener("click", exportData);
     $("#clear-data").addEventListener("click", clearData);
     setFileLabel($("#cards-file"), "#cards-file-name");

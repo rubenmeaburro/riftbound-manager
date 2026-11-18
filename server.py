@@ -157,9 +157,10 @@ def event_list(payload: object) -> list[dict[str, object]]:
     return []
 
 
-def normalize_topdeck(payload: object) -> list[dict[str, object]]:
+def normalize_topdeck(payload: object, legend_query: str = "") -> list[dict[str, object]]:
     decks: list[dict[str, object]] = []
     seen: set[str] = set()
+    wanted_legend = normalized(legend_query)
     for event in event_list(payload):
         event_id = str(event.get("TID") or event.get("tid") or event.get("id") or "event")
         event_name = str(event.get("tournamentName") or event.get("name") or event_id)
@@ -169,6 +170,9 @@ def normalize_topdeck(payload: object) -> list[dict[str, object]]:
             continue
         for index, player in enumerate(standings):
             if not isinstance(player, dict):
+                continue
+            leader = str(player.get("leader") or "")
+            if wanted_legend and wanted_legend not in normalized(leader):
                 continue
             cards = cards_from_deck_object(player.get("deckObj"))
             if not cards:
@@ -180,7 +184,6 @@ def normalize_topdeck(payload: object) -> list[dict[str, object]]:
             if deck_id in seen:
                 continue
             seen.add(deck_id)
-            leader = str(player.get("leader") or "")
             player_name = str(player.get("name") or f"Lista {index + 1}")
             decks.append({
                 "id": deck_id,
@@ -216,7 +219,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_json(404, {"error": "Ruta no encontrada."})
             return
         if not TOPDECK_API_KEY:
-            self.send_json(503, {"error": "No hay clave de TopDeck configurada. Reinicia el servidor e introdúcela en la Terminal; no la pegues en el navegador ni en el repositorio."})
+            self.send_json(503, {"error": "Falta la clave gratuita de TopDeck. Crea una desde su Developer Portal y configura el servidor local al arrancarlo; la clave no debe pegarse en la app ni en el repositorio."})
             return
         if time.monotonic() - LAST_TOPDECK_REQUEST < 12:
             self.send_json(429, {"error": "Espera unos segundos antes de volver a consultar TopDeck."})
@@ -229,6 +232,10 @@ class Handler(SimpleHTTPRequestHandler):
             options = json.loads(self.rfile.read(length).decode("utf-8"))
             if not isinstance(options, dict):
                 self.send_json(400, {"error": "Los filtros enviados no son válidos."})
+                return
+            legend_query = str(options.get("legend", "")).strip()
+            if not legend_query or len(legend_query) > 80:
+                self.send_json(400, {"error": "Escribe una leyenda de hasta 80 caracteres."})
                 return
             days = max(7, min(365, int(options.get("days", 90))))
             minimum = max(0, min(1024, int(options.get("minimumPlayers", 8))))
@@ -258,7 +265,7 @@ class Handler(SimpleHTTPRequestHandler):
             LAST_TOPDECK_REQUEST = time.monotonic()
             with urlopen(request, timeout=30) as response:
                 payload = json.loads(response.read().decode("utf-8"))
-            decks = normalize_topdeck(payload)
+            decks = normalize_topdeck(payload, legend_query)
             self.send_json(200, {"source": "TopDeck.gg", "fetched": datetime.now(timezone.utc).isoformat(), "decks": decks, "count": len(decks)})
         except HTTPError as error:
             if error.code == 429:
