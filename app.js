@@ -3,6 +3,8 @@
 
   const DB_NAME = "riftbound-deck-advisor-local";
   const DB_VERSION = 1;
+  const RIFTHUNT_BULK_CARDS = "https://api.rifthunt.com/bulk/cards";
+  const RIFTHUNT_REFRESH_KEY = "riftbound-deck-advisor-rifthunt-last-fetch";
   const $ = (selector) => document.querySelector(selector);
   const ui = {
     cardCount: $("#card-count"), deckCount: $("#deck-count"), collectionCount: $("#collection-count"),
@@ -122,7 +124,7 @@
 
   function resolveCard(value) {
     if (value && typeof value === "object") {
-      const ref = firstValue(value, ["card_id", "cardId", "printing_id", "printingId", "oracle_id", "oracleId", "id", "name", "card", "card_name", "cardName"], "");
+      const ref = firstValue(value, ["card_id", "cardId", "printing_id", "printingId", "oracle_id", "oracleId", "riftbound_id", "riftboundId", "variant_number", "variantNumber", "publicCode", "public_code", "id", "name", "card", "card_name", "cardName"], "");
       return resolveCard(ref);
     }
     const text = String(value ?? "");
@@ -159,7 +161,7 @@
   function parseCsv(text) {
     const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
     if (lines.length < 2) throw new Error("El CSV de colección no contiene filas de datos.");
-    const parseLine = (line) => {
+    const parseLine = (line, delimiter) => {
       const values = [];
       let value = "";
       let quoted = false;
@@ -167,23 +169,37 @@
         const char = line[i];
         if (char === '"' && line[i + 1] === '"' && quoted) { value += '"'; i++; }
         else if (char === '"') quoted = !quoted;
-        else if (char === "," && !quoted) { values.push(value.trim()); value = ""; }
+        else if (char === delimiter && !quoted) { values.push(value.trim()); value = ""; }
         else value += char;
       }
       values.push(value.trim());
       return values;
     };
-    const headers = parseLine(lines[0]).map((header) => norm(header).replace(/\s+/g, "_"));
+    const firstLine = lines[0];
+    const delimiters = [",", ";", "\t"];
+    let quoted = false;
+    const counts = new Map(delimiters.map((delimiter) => [delimiter, 0]));
+    for (let i = 0; i < firstLine.length; i++) {
+      const char = firstLine[i];
+      if (char === '"' && firstLine[i + 1] === '"' && quoted) i++;
+      else if (char === '"') quoted = !quoted;
+      else if (!quoted && counts.has(char)) counts.set(char, counts.get(char) + 1);
+    }
+    const delimiter = delimiters.sort((a, b) => counts.get(b) - counts.get(a))[0];
+    const headers = parseLine(firstLine, delimiter).map((header) => norm(header).replace(/\s+/g, "_"));
     return lines.slice(1).map((line) => {
-      const values = parseLine(line);
+      const values = parseLine(line, delimiter);
       return Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]));
     });
   }
 
   function getCollectionIdentity(row) {
-    const ref = firstValue(row, ["oracle_id", "oracleid", "oracle key", "card_id", "cardid", "printing_id", "printingid", "id", "card", "name", "card_name", "cardname"], "");
-    const card = resolveCard(ref);
-    return card?.identity || norm(ref);
+    const code = firstValue(row, ["oracle_id", "oracleid", "oracle_key", "card_id", "cardid", "printing_id", "printingid", "riftbound_id", "riftboundid", "variant_number", "variantnumber", "card_number", "cardnumber", "card_code", "code", "id"], "");
+    const cardByCode = code ? resolveCard(code) : null;
+    if (cardByCode) return cardByCode.identity;
+    const name = firstValue(row, ["card", "name", "card_name", "cardname"], "");
+    const cardByName = name ? resolveCard(name) : null;
+    return cardByName?.identity || norm(code || name);
   }
 
   function normalizeCollection(rows) {
@@ -452,6 +468,90 @@
     });
   }
 
+  function localDateTime(value) {
+    const date = value ? new Date(value) : new Date();
+    return Number.isNaN(date.getTime()) ? "fecha no indicada" : date.toLocaleString("es-ES", { dateStyle: "medium", timeStyle: "short" });
+  }
+
+  async function fetchCardsOnline() {
+    const button = $("#fetch-cards-online");
+    if (!button) return;
+    const previousLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = "Consultando…";
+    ui.status.textContent = "Descargando el catálogo público de RiftHunt…";
+    ui.status.classList.remove("error-text");
+    try {
+      const previousFetch = Number(localStorage.getItem(RIFTHUNT_REFRESH_KEY) || 0);
+      const elapsed = Date.now() - previousFetch;
+      if (previousFetch && elapsed < 24 * 60 * 60 * 1000) {
+        ui.status.textContent = `Ya se descargó hace menos de 24 horas (${localDateTime(previousFetch)}). Se respeta la frecuencia recomendada por RiftHunt.`;
+        return;
+      }
+      const response = await fetch(RIFTHUNT_BULK_CARDS, { method: "GET", headers: { Accept: "application/json" } });
+      if (!response.ok) throw new Error(`RiftHunt respondió ${response.status}.`);
+      const payload = await response.json();
+      const rawCards = unwrapJson(payload, ["cards", "data"]);
+      if (!rawCards.length) throw new Error("La respuesta no contiene cartas.");
+      const cards = rawCards.map(normalizeCard);
+      await replaceStore("cards", cards);
+      localStorage.setItem(RIFTHUNT_REFRESH_KEY, String(Date.now()));
+      await refresh();
+      const fetchedAt = payload.fetched ? ` · datos de ${localDateTime(payload.fetched)}` : "";
+      ui.status.textContent = `Catálogo actualizado desde RiftHunt: ${cards.length.toLocaleString("es-ES")} impresiones${fetchedAt}.`;
+    } catch (error) {
+      ui.status.textContent = `No se pudo descargar el catálogo. Comprueba la conexión y vuelve a intentarlo. ${error.message || ""}`.trim();
+      ui.status.classList.add("error-text");
+    } finally {
+      button.disabled = false;
+      button.textContent = previousLabel;
+    }
+  }
+
+  async function fetchTopDeckOnline() {
+    const button = $("#fetch-topdeck-decks");
+    if (!button) return;
+    if (!state.cards.length) {
+      ui.status.textContent = "Actualiza primero el catálogo de RiftHunt para poder asociar los nombres de las listas a sus cartas.";
+      ui.status.classList.add("error-text");
+      return;
+    }
+    const previousLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = "Buscando…";
+    ui.status.textContent = "Consultando las listas públicas de TopDeck.gg…";
+    ui.status.classList.remove("error-text");
+    try {
+      const response = await fetch("/api/topdeck/decks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          format: $("#topdeck-format").value,
+          days: Number($("#topdeck-days").value),
+          minimumPlayers: Number($("#topdeck-minimum").value)
+        })
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || `El servidor respondió ${response.status}.`);
+      const imported = (payload.decks || []).map((deck, index) => parseDeck(deck, index));
+      if (!imported.length) {
+        ui.status.textContent = "TopDeck no encontró listas públicas con esos filtros. Prueba otro periodo o formato.";
+        return;
+      }
+      const decksById = new Map(state.decks.map((deck) => [deck.id, deck]));
+      for (const deck of imported) decksById.set(deck.id, deck);
+      await replaceStore("decks", [...decksById.values()]);
+      await refresh();
+      ui.status.textContent = `Añadidas o actualizadas ${imported.length} listas públicas de TopDeck.gg. Total guardado: ${state.decks.length}.`;
+    } catch (error) {
+      ui.status.textContent = error.message || "No se pudieron importar las listas de TopDeck.gg.";
+      ui.status.classList.add("error-text");
+    } finally {
+      button.disabled = false;
+      button.textContent = previousLabel;
+    }
+  }
+
   async function importSelected() {
     ui.importButton.disabled = true;
     ui.status.textContent = "Importando…";
@@ -533,6 +633,8 @@
     ui.legend.addEventListener("change", renderDeckSelect);
     ui.deck.addEventListener("change", renderSelectedDeck);
     ui.importButton.addEventListener("click", importSelected);
+    $("#fetch-cards-online").addEventListener("click", fetchCardsOnline);
+    $("#fetch-topdeck-decks").addEventListener("click", fetchTopDeckOnline);
     $("#export-data").addEventListener("click", exportData);
     $("#clear-data").addEventListener("click", clearData);
     setFileLabel($("#cards-file"), "#cards-file-name");

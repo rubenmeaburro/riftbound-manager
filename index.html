@@ -67,7 +67,7 @@
       <div class="method-grid"><div><b>01</b><span>Función y texto de efecto</span></div><div><b>02</b><span>Coste de energía y runas</span></div><div><b>03</b><span>Dominios y etiquetas</span></div><div><b>04</b><span>Solapamiento con la estrategia</span></div></div>
     </section>
 
-    <footer>Prototipo local. Riftbound Deck Advisor was created under Riot Games' "Legal Jibber Jabber" policy using assets owned by Riot Games. Riot Games does not endorse or sponsor this project. La app no descarga datos ni imágenes: importa archivos que aportes y los guarda localmente.</footer>
+    <footer>Prototipo local. Riftbound Deck Advisor was created under Riot Games' "Legal Jibber Jabber" policy using assets owned by Riot Games. Riot Games does not endorse or sponsor this project. Datos de listas proporcionados por <a href="https://topdeck.gg" target="_blank" rel="noreferrer">TopDeck.gg</a>. Catálogo de cartas de <a href="https://rifthunt.com" target="_blank" rel="noreferrer">RiftHunt</a>. Tu colección y listas se guardan localmente.</footer>
   </main>
 
   <dialog id="import-dialog">
@@ -78,8 +78,22 @@
       <div class="import-grid">
         <label class="upload-card"><span class="upload-number">01</span><b>Catálogo de cartas</b><small>JSON · array de cartas o { "cards": [...] }</small><input type="file" id="cards-file" accept=".json,application/json"><span class="file-name" id="cards-file-name">Seleccionar JSON</span></label>
         <label class="upload-card"><span class="upload-number">02</span><b>Listas de mazo</b><small>JSON · array de listas o { "decks": [...] }</small><input type="file" id="decks-file" accept=".json,application/json"><span class="file-name" id="decks-file-name">Seleccionar JSON</span></label>
-        <label class="upload-card"><span class="upload-number">03</span><b>Mi colección</b><small>CSV · columnas card_id o name, quantity</small><input type="file" id="collection-file" accept=".csv,text/csv"><span class="file-name" id="collection-file-name">Seleccionar CSV</span></label>
+        <label class="upload-card"><span class="upload-number">03</span><b>Mi colección</b><small>CSV · Piltover Archive o card_id/name, quantity</small><input type="file" id="collection-file" accept=".csv,text/csv"><span class="file-name" id="collection-file-name">Seleccionar CSV</span></label>
       </div>
+      <div class="online-source">
+        <div><span class="source-dot"></span><div><b>Catálogo público de RiftHunt</b><small>Descarga las cartas en JSON; la colección y las listas no se envían.</small></div></div>
+        <button class="button button-outline" id="fetch-cards-online" type="button">Actualizar catálogo</button>
+      </div>
+      <div class="topdeck-source">
+        <div class="topdeck-heading"><span class="source-dot"></span><div><b>Listas públicas de torneos · TopDeck.gg</b><small>Importa listas del formato y periodo; después se agrupan por leyenda.</small></div></div>
+        <div class="source-controls">
+          <label>Formato<select id="topdeck-format"><option>Constructed</option><option>Limited</option><option>Sealed</option><option>2v2</option><option>Free-for-All</option></select></label>
+          <label>Periodo<select id="topdeck-days"><option value="30">Últimos 30 días</option><option value="90" selected>Últimos 90 días</option><option value="180">Últimos 180 días</option><option value="365">Último año</option></select></label>
+          <label>Mínimo de jugadores<select id="topdeck-minimum"><option value="0">Cualquiera</option><option value="8" selected>8</option><option value="16">16</option><option value="32">32</option></select></label>
+          <button class="button button-outline" id="fetch-topdeck-decks" type="button">Importar listas</button>
+        </div>
+      </div>
+      <p class="source-caption">El catálogo se consulta como máximo una vez cada 24 horas. TopDeck requiere una clave gratuita que se introduce al arrancar el servidor local; la aplicación no la guarda. Solo se reciben listas públicas de torneos finalizados o con listas visibles. Piltover Archive permite exportar tu colección CSV, pero no publica documentación oficial para conectar su API.</p>
       <details class="format-details" id="format-details"><summary>Ver ejemplo de estructura</summary><pre>{
   "cards": [{
     "id": "ogn-001", "oracle_id": "card-001",
