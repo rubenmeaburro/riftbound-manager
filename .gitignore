@@ -1,0 +1,8 @@
+# Avoid committing local exports and personal collection data.
+collection.csv
+*.collection.csv
+personal-data/
+data/private/
+.env
+.env.*
+.DS_Store

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#11131a">
+  <title>Riftbound Deck Advisor · local</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#top"><span class="brand-mark">R</span><span>Riftbound <b>Deck Advisor</b></span></a>
+    <div class="local-badge"><span></span> Datos guardados solo en este navegador</div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="eyebrow">ASISTENTE LOCAL DE CONSTRUCCIÓN</div>
+      <h1>Tu colección.<br><em>Un mazo que puedes jugar.</em></h1>
+      <p>Compara listas por leyenda y encuentra reemplazos de las cartas que te faltan. Cada sugerencia explica el ajuste de función, coste y dominios.</p>
+      <div class="hero-actions">
+        <button class="button button-primary" id="open-import">Cargar mis datos</button>
+        <button class="button button-quiet" id="show-format">Ver formatos admitidos</button>
+      </div>
+    </section>
+
+    <section class="data-strip" aria-label="Estado de los datos">
+      <div><span class="metric" id="card-count">0</span><span>cartas en catálogo</span></div>
+      <div><span class="metric" id="deck-count">0</span><span>listas analizadas</span></div>
+      <div><span class="metric" id="collection-count">0</span><span>copias en colección</span></div>
+      <div class="data-actions"><button class="text-button" id="export-data">Exportar copia</button><button class="text-button danger-text" id="clear-data">Borrar datos locales</button></div>
+    </section>
+
+    <section class="workspace">
+      <aside class="side-panel panel">
+        <div class="section-heading"><div><div class="eyebrow">PASO 1</div><h2>Elige leyenda</h2></div><span class="step-icon">01</span></div>
+        <label class="field-label" for="legend-select">Leyenda</label>
+        <select id="legend-select" disabled><option value="">Carga listas para empezar</option></select>
+        <div class="legend-note" id="legend-note">Las listas se agrupan por leyenda. Se muestra la frecuencia de inclusión en las listas que hayas importado.</div>
+        <div class="divider"></div>
+        <div class="section-heading compact"><div><div class="eyebrow">PASO 2</div><h2>Elige una lista base</h2></div><span class="step-icon">02</span></div>
+        <label class="field-label" for="deck-select">Lista de referencia</label>
+        <select id="deck-select" disabled><option value="">Elige una leyenda</option></select>
+        <div class="legend-note">Las listas recientes y con mejor resultado aparecen primero cuando esos datos se incluyen en la importación.</div>
+        <button class="button button-outline full-width" id="open-import-side">Importar / actualizar datos</button>
+      </aside>
+
+      <section class="main-panel">
+        <div class="panel popularity-panel">
+          <div class="section-heading"><div><div class="eyebrow">POPULARIDAD OBSERVADA</div><h2 id="popularity-title">Cartas más usadas por leyenda</h2></div><span class="sample-pill" id="sample-size">Sin muestra</span></div>
+          <p class="panel-intro" id="popularity-intro">Importa listas para ver qué cartas aparecen con más frecuencia. La frecuencia describe tu muestra importada; no es una predicción de rendimiento.</p>
+          <div class="table-wrap">
+            <table><thead><tr><th>Carta</th><th>Frecuencia</th><th>Copias medias</th><th>En tu colección</th></tr></thead><tbody id="popularity-body"><tr class="empty-row"><td colspan="4">Aún no hay listas importadas.</td></tr></tbody></table>
+          </div>
+        </div>
+
+        <div class="panel deck-panel">
+          <div class="section-heading"><div><div class="eyebrow">AJUSTE A TU COLECCIÓN</div><h2>Huecos y sustituciones</h2></div><span class="sample-pill sample-neutral" id="gap-count">Sin lista</span></div>
+          <p class="panel-intro" id="deck-intro">Selecciona una lista base. Para sugerir una alternativa, la app busca cartas disponibles en tu colección y compara tipo, función, coste, dominio y sinergias detectables.</p>
+          <div id="deck-results" class="deck-results"><div class="empty-state"><div class="empty-icon">↗</div><b>Empieza cargando tus datos</b><span>Catálogo de cartas, listas de mazo y colección. Todo se procesa en este dispositivo.</span><button class="text-button" id="open-import-empty">Abrir importador</button></div></div>
+        </div>
+      </section>
+    </section>
+
+    <section class="method panel">
+      <div><div class="eyebrow">CÓMO SE PUNTÚA</div><h2>Sugerencias transparentes</h2><p>El orden combina función detectada en el texto, cercanía de coste, dominios y etiquetas/keywords. Es una ayuda para comparar, no una garantía de equivalencia competitiva. La lista resultante debe revisarse con las reglas y la legalidad del formato elegido.</p></div>
+      <div class="method-grid"><div><b>01</b><span>Función y texto de efecto</span></div><div><b>02</b><span>Coste de energía y runas</span></div><div><b>03</b><span>Dominios y etiquetas</span></div><div><b>04</b><span>Solapamiento con la estrategia</span></div></div>
+    </section>
+
+    <footer>Prototipo local. Riftbound Deck Advisor was created under Riot Games' "Legal Jibber Jabber" policy using assets owned by Riot Games. Riot Games does not endorse or sponsor this project. La app no descarga datos ni imágenes: importa archivos que aportes y los guarda localmente.</footer>
+  </main>
+
+  <dialog id="import-dialog">
+    <form method="dialog" class="dialog-shell" id="import-form">
+      <button class="dialog-close" value="close" aria-label="Cerrar">×</button>
+      <div class="eyebrow">DATOS LOCALES</div><h2>Importar fuentes</h2>
+      <p class="dialog-lead">Selecciona cada archivo. El catálogo y las listas se leen en este navegador; la colección permanece en IndexedDB local y no se envía a ningún servidor.</p>
+      <div class="import-grid">
+        <label class="upload-card"><span class="upload-number">01</span><b>Catálogo de cartas</b><small>JSON · array de cartas o { "cards": [...] }</small><input type="file" id="cards-file" accept=".json,application/json"><span class="file-name" id="cards-file-name">Seleccionar JSON</span></label>
+        <label class="upload-card"><span class="upload-number">02</span><b>Listas de mazo</b><small>JSON · array de listas o { "decks": [...] }</small><input type="file" id="decks-file" accept=".json,application/json"><span class="file-name" id="decks-file-name">Seleccionar JSON</span></label>
+        <label class="upload-card"><span class="upload-number">03</span><b>Mi colección</b><small>CSV · columnas card_id o name, quantity</small><input type="file" id="collection-file" accept=".csv,text/csv"><span class="file-name" id="collection-file-name">Seleccionar CSV</span></label>
+      </div>
+      <details class="format-details" id="format-details"><summary>Ver ejemplo de estructura</summary><pre>{
+  "cards": [{
+    "id": "ogn-001", "oracle_id": "card-001",
+    "name": "Nombre de carta", "type": "Unit",
+    "domains": ["Fury"], "energy": 2, "power": 1,
+    "might": 3, "keywords": [], "tags": [],
+    "rules_text": "Texto de efecto"
+  }],
+  "decks": [{
+    "id": "lista-1", "name": "Lista de ejemplo",
+    "legend": "Nombre de leyenda", "champion": "Nombre de campeón",
+    "event": "Torneo", "date": "2026-10-01", "placement": 1,
+    "cards": [{"card_id": "ogn-001", "quantity": 3}]
+  }]
+}
+
+CSV de colección: card_id,quantity</pre><p class="format-note">Los nombres de campos alternativos comunes (printing_id, oracle_id, cardId, count, text) también se reconocen. Cada lista debería incluir la leyenda, las cartas y cantidades.</p></details>
+      <div class="dialog-actions"><span class="import-status" id="import-status">Puedes cargar uno o varios archivos.</span><button class="button button-primary" id="import-submit" type="button">Importar seleccionados</button></div>
+    </form>
+  </dialog>
+  <script src="app.js"></script>
+</body>
+</html>
